@@ -22,9 +22,10 @@ class ExclCategory:
 
 
 class PermRef:
-    def __init__(self, perm, sgId):
+    def __init__(self, perm, sgId, cidrIp):
         self.perm = perm
         self.sgId = sgId
+        self.cidrIp = cidrIp
 
 
 rds = boto3.client('rds')
@@ -53,16 +54,14 @@ for sgId, dbIds in sgRefs.items():
             description = ipRange.get('Description', '')
             if re.search(r'\bremov(e|ing)\b', description, re.IGNORECASE):
                 cat = ExclCategory(cidrIp, toPort, description)
-                permRef = PermRef(perm, sgId)
+                permRef = PermRef(perm, sgId, cidrIp)
                 exclusions.setdefault(cat, []).append(permRef)
 
 for cat, permRefList in exclusions.items():
     print("\nCidrIp: %s, ToPort: %s, Description: '%s'" % (cat.cidrIp, cat.toPort, cat.description))
     print("    %s" % ", ".join([permRef.sgId for permRef in permRefList]))
-    print("\nDelete (y/N)? ", end='')
-    ch = sys.stdin.read(1)
-    print()
-    if ch == "y" or ch == "Y":
+    answer = input("\nDelete (y/N)? ")
+    if answer == "y" or answer == "Y":
         for permRef in permRefList:
             print("Revoking for SG=%s" % permRef.sgId)
-            ec2.revoke_security_group_ingress(GroupId=permRef.sgId, IpPermissions=[permRef.perm])
+            ec2.revoke_security_group_ingress(GroupId=permRef.sgId, IpPermissions=[permRef.perm], CidrIp=permRef.cidrIp)
